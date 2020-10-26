@@ -5,7 +5,7 @@ module uart2bus_refmodel (	input clock,
 							output ser_out,
 							// BUS IF
 							output reg [15:0] int_address,
-							output [7:0] int_wr_data,
+							output reg [7:0] int_wr_data,
 							output int_write,
 							output int_read,
 							input [7:0] int_rd_data,
@@ -13,7 +13,9 @@ module uart2bus_refmodel (	input clock,
 							input int_gnt);
 
 reg [7:0] mode=0'hff,
-	white = 0'hff, 
+	white = 0'hff,
+	data = 0'hff,
+	temp_data,
 	EOL = 0'hff,
  	w = 0'h77,
  	W = 0'h57,
@@ -38,11 +40,37 @@ task automatic address_field();
 	end
 endtask
 
+task automatic data_field();
+	repeat(8) begin
+		#1 data <= {ser_in,data[7:1]};
+	end	
+endtask
+
 task automatic EOL_field();
 	repeat(9) begin
 		#1 EOL <= {ser_in,EOL[7:1]};
 	end
-endtask 
+endtask
+
+task automatic Write();
+	fork
+		begin
+			space_field();
+		end
+		begin
+			#8 data_field();
+		end
+		begin
+			#16 space_field();
+		end
+		begin
+			#24 address_field();
+		end
+		begin
+			#40 EOL_field();
+		end
+	join_any	
+endtask
 
 task automatic Read();
 	fork
@@ -70,17 +98,22 @@ if (reset == 0 && ser_in == 0) begin
 		begin
 	  	#9
 			if (mode == W || mode == w) begin 				//write text mode
-				//space field
-				//data field
-				//space field
-				//address field
-				//EOL field
+				Write();
+				if (white == space || white == tab) begin
+					#8  assign temp_data=data;
+					#8  if (white == space || white == tab)begin
+								#16 assign temp_int_address=address;
+								#8  if (EOL == CR || EOL== LF) begin
+											assign int_address=temp_int_address;
+											assign int_wr_data=temp_data;
+										end	
+							end
 			end
 			else if (mode == R || mode == r) begin 		//read text mode
 				Read();											
 				if (white == space || white == tab) begin
-					#16   assign temp_int_address=address;
-					#8 if (EOL == CR || EOL== LF) begin
+					#16 assign temp_int_address=address;
+					#8  if (EOL == CR || EOL== LF) begin
 						assign int_address=temp_int_address;
 					end	
 				end
