@@ -26,27 +26,37 @@ reg [7:0] mode=0'hff,
 	tab = 0'h09;
 reg [15:0] temp_int_address, address = 0'hffffffff;
 
+task automatic space_field();
+	repeat(9) begin
+		#1 white <= {ser_in,white[7:1]};
+	end	
+endtask
+
+task automatic address_field();
+	repeat(16) begin
+		#1 address <= {ser_in,address[15:1]};
+	end
+endtask
+
+task automatic EOL_field();
+	repeat(9) begin
+		#1 EOL <= {ser_in,EOL[7:1]};
+	end
+endtask 
+
 task automatic Read();
 	fork
-		begin //space field
-			repeat(9) begin
-				#1 white <= {ser_in,white[7:1]};
-			end	
+		begin
+			space_field();
 		end
 		begin
-			#8
-			repeat(16) begin //address field
-				#1 address <= {ser_in,address[15:1]};
-			end
+			#8 address_field();
 		end
 		begin
-			#16
-			repeat(9) begin //EOL field
-				#1 EOL <= {ser_in,EOL[7:1]};
-			end
+			#24 EOL_field();
 		end
 	join_any
-endtask //automatic
+endtask
 
 initial begin
 if (reset == 0 && ser_in == 0) begin
@@ -67,12 +77,12 @@ if (reset == 0 && ser_in == 0) begin
 				//EOL field
 			end
 			else if (mode == R || mode == r) begin 		//read text mode
-				Read();													
+				Read();											
 				if (white == space || white == tab) begin
 					#16   assign temp_int_address=address;
 					#8 if (EOL == CR || EOL== LF) begin
 						assign int_address=temp_int_address;
-					end		
+					end	
 				end
 			end
 			else if (mode == b) begin 								//binary mode
